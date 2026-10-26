@@ -5,10 +5,18 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Virtual environments
 .venv/
 venv/
+env/
+envs/
+.conda/
+.env/
 
 # cr-renderer is a separate, external open-source project
 # (https://github.com/CyberAgentAILab/cr-renderer), pulled in locally for
@@ -20,3 +28,7 @@ venv/
 # Generated run artifacts
 output/*
 !output/.gitkeep
+
+# Local visual evaluation artifacts (not submission outputs)
+/artifacts/
+/comparisons*.zip

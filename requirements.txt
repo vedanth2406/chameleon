@@ -1,2 +1,4 @@
-Pillow>=10.0
-git+https://github.com/CyberAgentAILab/cr-renderer
+# Verified Linux/amd64 runtime; keep transitive resolution fixed as well.
+-c constraints-linux-amd64.txt
+Pillow==13.0.0
+cr-renderer @ git+https://github.com/CyberAgentAILab/cr-renderer@a17e1fb9a732959dd6c21ae168d5ee09d74bd64f

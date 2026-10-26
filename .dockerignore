@@ -1,0 +1,15 @@
+# Only runtime/build inputs belong in the submission build context.
+**
+!Dockerfile
+!requirements.txt
+!constraints-linux-amd64.txt
+!chameleon_design_schema_v0.9.json
+!brand_kit/
+!brand_kit/**
+!renderer/
+!renderer/**
+!engine/
+!engine/**
+**/__pycache__/
+**/*.pyc
+**/.DS_Store

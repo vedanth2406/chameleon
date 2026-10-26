@@ -1,99 +1,107 @@
-# CHAMELEON — starter repo
+# CHAMELEON layout engine
 
-This is the scaffolding for your engine. It handles input loading, output
-writing, rendering, and Docker packaging — so the only file you need to
-edit is **`engine/resize.py`**.
+An offline, deterministic design-resizing engine. The public interface is
+`resize(source: dict, target_canvas: dict) -> dict` in `engine/resize.py`.
+`engine.main` reads tasks from `input/` and writes one resized JSON and one
+real-renderer PNG per task to `output/`.
 
-```
-input:  a task JSON (source design + target canvas)
-              |
-              v
-        engine/resize.py   <-- YOU IMPLEMENT THIS
-              |
-              v
-output: <task>_output.json  (schema-valid resized design)
-        <task>_output.png   (rendered preview)
-```
+## Build and run
 
-Both the JSON and the PNG are what get evaluated — see `RULES.md`.
+Docker with Linux/amd64 support is the verified runtime. Build-time internet
+access is required; runtime works with networking disabled.
 
-## Repo layout
-
-```
-engine/
-  resize.py        <- implement your approach here
-  main.py           <- orchestrator (input -> resize() -> output). Don't need to edit this.
-renderer/           <- the real renderer (transformer-convertor + cr-renderer), already vendored
-brand_kit/
-  assets/           <- image files referenced by asset_id in the sample designs
-  fonts/            <- font files matching the schema's font_family values
-input/               <- drop task JSON files here for local testing (3 samples included)
-output/              <- results land here
-chameleon_design_schema_v0.9.json   <- full field-by-field spec for the design format
-Dockerfile
-RULES.md
+```sh
+docker build --platform linux/amd64 -t chameleon-engine .
+mkdir -p artifacts
+chameleon_run_dir=$(mktemp -d "$PWD/artifacts/run.XXXXXX")
+docker run --rm --platform linux/amd64 --network none \
+  -v "$PWD/input:/app/input:ro" \
+  -v "$chameleon_run_dir:/app/output" \
+  chameleon-engine
 ```
 
-## Quick start (no Docker needed for iterating on `resize()`)
+Open the `_output.png` and `_output.json` files in `$chameleon_run_dir`
+(print the path with `echo "$chameleon_run_dir"`). A fresh directory prevents stale outputs
+from masking failures. The three original sample tasks are included.
 
-```bash
-pip install -r requirements.txt
+`requirements.txt` pins Pillow and the exact cr-renderer Git commit.
+`constraints-linux-amd64.txt` pins the verified container's transitive Python
+packages; it is consumed by both pip and Docker. The base image is pinned by
+digest. These versions came from the verified Linux image, not a Mac Conda
+package export. System packages installed by apt and isolated Python build
+backends are not fully locked; this is a version checkpoint, not a byte-for-byte
+image rebuild guarantee.
+
+For local iteration, use a separate Python 3.11 environment with compatible
+system libraries (the Docker image remains the reproducibility reference):
+
+```sh
+python3.11 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
 python -m engine.main
 ```
 
-This processes every `*.json` file in `input/` (the 3 sample designs are
-already there — one per difficulty level) and writes an `_output.json` and
-`_output.png` for each into `output/`.
+## Approach and guarantees
 
-The included baseline is a **uniform stretch** — deliberately the wrong
-approach (see the main brief: "a naive program stretches the picture; a
-good one moves the furniture"). It's there so the pipeline runs on day
-one. Run it once, look at `output/*_output.png`, and you'll see exactly
-why it's not good enough — that's the point. Replace the body of
-`resize()` in `engine/resize.py`, not just its constants.
+The engine infers backgrounds, decoration, importance, and related layout units;
+explicit groups take precedence. It generates several arrangements, measures
+and wraps text with the supplied fonts and renderer helpers, checks and repairs
+candidates, then selects a layout deterministically. Scoring considers readable
+text, hierarchy, recognizable foreground imagery, composition, spacing,
+collisions, and rotated bounds. Similar aspect ratios favor source composition.
 
-## What the self-check does (and doesn't do)
+Every element ID, text string, font family, style run, asset reference, and group
+membership is preserved. Only permitted geometry and text font-size changes are
+made; inputs are not mutated. Foreground image boxes retain their proportions.
+No content is hidden, deleted, regenerated, or replaced. Runtime uses local
+assets/fonts and requires no API calls or model downloads.
 
-`main.py` runs a quick structural check after every task — same element
-`id`s as the source, required fields present, nothing off-canvas. **This
-is not the official scorer.** It exists to catch obvious mistakes before
-you waste a submission on them. See `RULES.md` for what's actually
-checked and graded.
+Runtime helpers live in `engine/`. The supplied `engine/main.py`, renderer,
+brand kit, schema, and original samples remain unchanged. Development tools and
+tests are separate and excluded from the Docker build context.
 
-A self-check warning does not fail the run — your JSON and PNG are still
-written either way. Read the warning; decide whether it's a real problem
-or, like the Level 2 sample's intentionally corner-bleeding decorative
-circle, an expected one.
+## Verification and development
 
-## The renderer
+Run the existing suite against the built image without installing test tools
+into the runtime image:
 
-`main.py` calls `renderer/converter/convert.py`'s `render_design_to_png()`
-(a vendored copy of `transformer-convertor`, wrapping `cr-renderer`) to
-produce each task's PNG — already wired in, no setup needed. It reads
-fonts/assets from `brand_kit/` and writes a real rendered preview, not a
-placeholder. If you ever see plain labeled boxes instead of real text and
-images in `output/*.png`, that means the import in `main.py` failed (e.g.
-`cr-renderer` didn't install — check `requirements.txt` installed cleanly)
-and it silently fell back to the box-and-label placeholder; don't judge
-your layout quality by that fallback.
-
-## Docker (how you'll actually be run)
-
-```bash
-docker build --platform linux/amd64 -t my-chameleon-engine .
-docker run --rm --network none \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
-  my-chameleon-engine
+```sh
+docker run --rm --platform linux/amd64 --network none \
+  -v "$PWD/input:/app/input:ro" \
+  -v "$PWD/tests:/app/tests:ro" -v "$PWD/tools:/app/tools:ro" \
+  --entrypoint python chameleon-engine -m unittest discover -s tests -v
 ```
 
-`--network none` matches how stage-one scoring runs: everything your
-engine needs must be installed at **build** time (add it to
-`requirements.txt`), not fetched at run time. If you're using a locally
-hosted model, bake its weights into the image during the build step.
+In a local development environment, generate comparisons with the real renderer:
 
-## See also
+```sh
+python -m tools.evaluate --synthetic --wide all
+```
 
-- `chameleon_design_schema_v0.9.json` — full input/output field spec
-- `RULES.md` — what's checked, what's graded, and what disqualifies a submission
-- FAQ — for anything not covered above
+Open `artifacts/comparisons/index.html` for source, stretch baseline, and selected
+layouts with PNGs, JSON, and measurements. Generated artifacts and comparison
+archives are ignored by Git. See [submission verification](docs/submission-verification.md)
+for actual build/run results, independent schema validation, fail-closed renderer
+checks, dependency provenance, and exact repeat-run commands.
+
+## Known limitations
+
+- Dense or extreme targets can still need very small text. The verified Level 3
+  banner has a 13 px headline, 9 px body/group text, and 7 px legal text; the legal
+  text remains difficult to read. Impossible fits emit warnings and preserve
+  content rather than silently removing it.
+- Group/role/overlap inference and local scores are heuristics, not official
+  scoring. Hidden inputs and the separate viewer submission are not verified.
+- The intentional missing Level 3 asset remains a labeled placeholder from the
+  real renderer. It is not repaired or replaced.
+- The supplied orchestrator can fall back to a box/label renderer on import
+  failure, and self-check warnings do not fail its exit code. The verification
+  harness explicitly rejects that fallback and validates the saved outputs.
+- Font measurement and rasterization can differ across platforms and dependency
+  versions. Determinism is verified within the pinned Linux image.
+
+See [the internal contract](docs/team-contract.md),
+[development notes](docs/development.md), [visual findings](docs/visual-quality.md),
+[RULES.md](RULES.md), [FAQ.md](FAQ.md), and the
+[design schema](chameleon_design_schema_v0.9.json).
