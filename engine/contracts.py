@@ -18,6 +18,26 @@ class LayoutUnit(TypedDict):
     importance: float
 
 
+class ContainerRelationship(TypedDict):
+    container_id: str
+    child_unit_keys: list[str]
+    child_ids: list[str]
+    confidence: float
+    signals: list[str]
+    # Left/top/right/bottom padding relative to the source child envelope.
+    padding: tuple[float, float, float, float]
+
+
+class LayerRelationship(TypedDict):
+    element_ids: tuple[str, str]
+    confidence: float
+    signals: list[str]
+    overlap_fraction: float
+    visible_overlap_fraction: float
+    # Local normalized alpha bounds; geometry only, no cached/generated pixels.
+    content_bounds: dict[str, tuple[float, float, float, float]]
+
+
 class Analysis(TypedDict):
     """Read-only layout metadata referencing original element IDs."""
 
@@ -26,6 +46,8 @@ class Analysis(TypedDict):
     decoration_ids: list[str]
     intentional_overlap_pairs: list[tuple[str, str]]
     diagnostics: list[str]
+    containers: list[ContainerRelationship]
+    layers: list[LayerRelationship]
 
 
 class Evaluation(TypedDict):

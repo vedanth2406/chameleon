@@ -11,6 +11,7 @@ from engine.groups import label_pair, valid_label_pair
 from engine.relationships import text_links, text_gap
 from engine.typography import fit_text, measure_text
 from engine.validation import schema_errors
+from engine.spatial_relationships import penalties as relationship_penalties, supported_pairs
 
 MUTABLE = {'x', 'y', 'width', 'height', 'font_size'}
 
@@ -18,7 +19,8 @@ MUTABLE = {'x', 'y', 'width', 'height', 'font_size'}
 def evaluate(source: dict, candidate: dict, analysis: Analysis) -> Evaluation:
     errors = schema_errors(candidate)
     costs = dict(readability=0., microscopic=0., headline_prominence=0., image_recognition=0., text_cohesion=0.,
-                 hierarchy=0., collisions=0., spacing=0., composition=0., image_scale=0.)
+                 hierarchy=0., collisions=0., spacing=0., composition=0., image_scale=0.,
+                 containment=0., layering=0.)
     if errors:
         return Evaluation(hard_errors=errors, penalties=costs, score=sum(costs.values()))
     src = {e['id']: e for e in source['elements']}
@@ -99,6 +101,7 @@ def evaluate(source: dict, candidate: dict, analysis: Analysis) -> Evaluation:
                 if length_old and length_new and abs(old[dimension] / length_old - new[dimension] / length_new) > 1e-4:
                     errors.append(f"{unit['key']}: group proportions changed")
     intentional = {frozenset(p) for p in analysis['intentional_overlap_pairs']}
+    intentional.update(supported_pairs(analysis, out))
     foreground = [e for e in candidate['elements'] if e['id'] not in backgrounds | decorations and e['id'] in src]
     for a, b in combinations(foreground, 2):
         if unit_of[a['id']] == unit_of[b['id']] or frozenset((a['id'], b['id'])) in intentional:
@@ -140,6 +143,7 @@ def evaluate(source: dict, candidate: dict, analysis: Analysis) -> Evaluation:
             if overlap >= .65*min(a['width'],b['width']) and b['y']>=a['y']:
                 gap=b['y']-a['y']-a['height']
                 costs['text_cohesion'] += .5*max(0.,gap/text_gap(a,b)-2) ** 2
+    costs['containment'], costs['layering'] = relationship_penalties(source, candidate, analysis)
     return Evaluation(hard_errors=list(dict.fromkeys(errors)), penalties=costs, score=sum(costs.values()))
 
 
@@ -184,4 +188,7 @@ def repair(source: dict, candidate: dict, analysis: Analysis) -> dict:
         for e in members:
             if e['type'] == 'text':
                 e.update(fit_text(e))
+    from engine.relationship_layout import restore_layers, wrap_containers
+    restore_layers(source, out, analysis)
+    wrap_containers(out, analysis)
     return out

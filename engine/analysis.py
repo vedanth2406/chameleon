@@ -44,6 +44,16 @@ def analyze(source: dict) -> Analysis:
                   and intersection(box(shape), box(e)) >= .95 * e['width'] * e['height']
                   and e['width'] * e['height'] < shape['width'] * shape['height']]
         if len(labels) == 1:
+            # A panel containing independent artwork/groups is not just a
+            # button for its one free text label. Leave it available for the
+            # source-derived enclosure pass after explicit units are built.
+            other_content = [e for e in elements if e['id'] not in (shape['id'], labels[0]['id'])
+                             and e['id'] not in backgrounds + decorations
+                             and (e['type'] == 'image' or e.get('group_id') is not None)
+                             and e.get('z_index', 0) >= shape.get('z_index', 0)
+                             and intersection(box(shape), box(e)) >= .985 * e['width'] * e['height']]
+            if other_content:
+                continue
             groups[('inferred', shape['id'])] = [shape, labels[0]]
             used.update(e['id'] for e in groups[('inferred', shape['id'])])
     for e in free:
@@ -82,6 +92,10 @@ def analyze(source: dict) -> Analysis:
         if (unit_of[a['id']] == unit_of[b['id']] or
                 a['id'] in backgrounds + decorations or b['id'] in backgrounds + decorations):
             pairs.append(tuple(sorted((a['id'], b['id']))))
-    return Analysis(units=units, background_ids=sorted(backgrounds),
-                    decoration_ids=sorted(decorations),
-                    intentional_overlap_pairs=sorted(set(pairs)), diagnostics=diagnostics)
+    result = Analysis(units=units, background_ids=sorted(backgrounds),
+                      decoration_ids=sorted(decorations),
+                      intentional_overlap_pairs=sorted(set(pairs)), diagnostics=diagnostics,
+                      containers=[], layers=[])
+    from engine.spatial_relationships import infer
+    result['containers'], result['layers'] = infer(source, result)
+    return result

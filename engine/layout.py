@@ -177,7 +177,7 @@ def _partition(units, weights, rectangle, gap, bias=1.):
 
 
 
-def generate_candidates(source: dict, target_canvas: dict, analysis: Analysis) -> list[dict]:
+def _base_candidates(source: dict, target_canvas: dict, analysis: Analysis) -> list[dict]:
     """Search composition, shelves, recursive partitions and editorial bands.
 
     Stable enumeration order breaks score ties. No content/ID/target catalog
@@ -269,4 +269,12 @@ def generate_candidates(source: dict, target_canvas: dict, analysis: Analysis) -
     from engine.horizontal import horizontal_candidates, coherent_text_candidates
     candidates.extend(horizontal_candidates(source, target_canvas, analysis, _prepare))
     candidates.extend(coherent_text_candidates(source, target_canvas, analysis, candidates))
+    return candidates
+
+
+def generate_candidates(source: dict, target_canvas: dict, analysis: Analysis) -> list[dict]:
+    """Retain the original search and add supported relationship alternatives."""
+    from engine.relationship_layout import relationship_candidates
+    candidates = _base_candidates(source, target_canvas, analysis)
+    candidates.extend(relationship_candidates(source, target_canvas, analysis, _base_candidates))
     return candidates

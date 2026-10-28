@@ -21,7 +21,8 @@ longer apply. The supplied renderer, brand kit, schema, samples, and
 `source` is a design containing `canvas` and `elements`, not the task wrapper.
 `target_canvas` contains positive integer `width` and `height` in pixels.
 Runtime helpers include `engine/geometry.py`, `engine/validation.py`,
-`engine/horizontal.py`, `engine/groups.py`, and `engine/relationships.py`. Docker already
+`engine/horizontal.py`, `engine/groups.py`, `engine/relationships.py`,
+`engine/spatial_relationships.py`, and `engine/relationship_layout.py`. Docker already
 copies all of `engine/`. Tests live in `tests/`; development tools live in `tools/`.
 The runtime imports neither. No new dependency is required beyond the supplied
 renderer requirements. Install dependencies at build/setup time; execution uses
@@ -39,6 +40,8 @@ extra fields added to output designs.
 | `decoration_ids` | `list[str]` | Ungrouped low-opacity shapes |
 | `intentional_overlap_pairs` | `list[tuple[str, str]]` | Unique unordered pairs of original IDs with source layering evidence |
 | `diagnostics` | `list[str]` | Missing assets and degenerate source geometry |
+| `containers` | `list[ContainerRelationship]` | Source-derived enclosure hints, complete child units, confidence and evidence |
+| `layers` | `list[LayerRelationship]` | Disjoint high-confidence image pairs and weaker competing/ambiguous hints |
 
 | `LayoutUnit` field | Type | Meaning |
 | --- | --- | --- |
@@ -53,6 +56,44 @@ and sample notes do not drive layout choices. A non-null `group_id`, including
 an empty string, takes precedence over heuristics. Explicit groups are never
 split, merged with other groups, or expanded to absorb ungrouped elements.
 Conservative heuristic grouping pairs a shape with a single contained text label.
+An enclosing panel with other independent content is left available for enclosure
+analysis rather than paired exclusively with its one free label.
+
+`ContainerRelationship` stores `container_id`, `child_unit_keys`, `child_ids`,
+`confidence`, `signals`, and `padding` (left/top/right/bottom normalized to the
+source child envelope). `LayerRelationship` stores a two-ID `element_ids` tuple,
+`confidence`, `signals`, `overlap_fraction`, `visible_overlap_fraction`, and
+`content_bounds` (ID to normalized local alpha-envelope `(x,y,width,height)`).
+Confidence is evidence strength, not a calibrated probability. No relationship
+metadata is inserted into a design. Explicit membership and the original unit
+partition remain unchanged; planning proxies are temporary allocations only.
+
+Enclosure evidence combines a filled, sufficiently opaque, unrotated rectangle,
+non-background coverage, stacking behind multiple complete units, occupancy and
+interior border geometry. Foreground layering requires offset partial overlap,
+comparable image geometry, contrasting rotations, transparency or differing
+stacking, and intersection of visible asset alpha envelopes. Unrelated text
+intersection reduces confidence. Local asset pixels are read only for bounds;
+missing assets supply no positive alpha evidence. Names, copy and evaluation
+intent annotations are never inference inputs.
+
+Only confidence at least 0.8 enables planning and pair-specific collision
+exceptions. Enclosures compete for complete child units; layer pairs use disjoint
+matching rather than transitive graph closure. Ambiguous/competing hints retain
+small soft penalties without rigid grouping or collision exemptions. The current
+layering inference deliberately does not split explicit multi-element groups.
+
+Relationship candidates retain the original search, add shared image-pair
+transforms, and either wrap independently rearranged children or reserve a panel
+slot with inner row/column alternatives. Container geometry follows the rotated
+child envelope with bounded padding. Repair restores supported pairs together
+and wraps enclosures after child repair. High-confidence pair exceptions do not
+excuse new near-total image occlusion or collisions with unrelated third elements.
+Soft `containment` and `layering` costs penalize lost enclosure/meaningful overlap
+and changed relative layer geometry, alongside existing readability costs. The
+source rotation, opacity, element order and z-index are preserved exactly.
+Connectors and diagram attachment are unchanged and remain unsupported; see
+[relationships.md](relationships.md) for evidence, compromises and limitations.
 
 General groups share one transform. Groups containing images or rotations use
 uniform scaling; unrotated text/shape groups may share an affine transform to

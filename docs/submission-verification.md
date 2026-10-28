@@ -1,5 +1,17 @@
 # Submission verification
 
+## Relationship update — 2026-10-28
+
+**PASS.** The final relationship-aware working tree was rebuilt for Linux/amd64
+with the unchanged supplied Dockerfile and pinned dependencies. Two fresh
+`--network none` sample runs, a third fail-closed real-renderer audit, independent
+schema validation, and all **39 regression tests** passed. No packaging or
+renderer changes were needed. Evidence is in
+`artifacts/relationships-final-docker-w1n9ifzu`; exact commands, visual tradeoffs,
+the 24-task rerun and remaining connector failures are recorded in
+[relationships.md](relationships.md). The checkpoint record below is retained
+as historical evidence; this update has not been committed or pushed.
+
 ## Reproducible checkpoint — 2026-10-26
 
 **PASS.** Rebuilt Linux/amd64 from pinned dependencies with `--no-cache`, ran
